@@ -26,14 +26,21 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     # Apply color splash to video using the last weights you trained
     python3 balloon.py splash --weights=last --video=<URL or path to file>
 """
-
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import sys
 import json
 import datetime
 import numpy as np
 import skimage.draw
+import tensorflow as tf
 
+import logging
+import os
+
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
+# logging.getLogger('tensorflow').setLevel(logging.FATAL)
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
 
@@ -65,6 +72,9 @@ class BalloonConfig(Config):
     # Adjust down if you use a smaller GPU.
     IMAGES_PER_GPU = 2
 
+    # Uncomment to train on 8 GPUs (default is 1)
+    GPU_COUNT = 2
+    
     # Number of classes (including background)
     NUM_CLASSES = 1 + 1  # Background + balloon
 
@@ -74,6 +84,8 @@ class BalloonConfig(Config):
     # Skip detections with < 90% confidence
     DETECTION_MIN_CONFIDENCE = 0.9
 
+    # Backbone
+    BACKBONE = "resnet50"
 
 ############################################################
 #  Dataset
@@ -196,7 +208,7 @@ def train(model):
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
                 epochs=30,
-                layers='heads')
+                layers='all')
 
 
 def color_splash(image, mask):
@@ -300,6 +312,9 @@ if __name__ == '__main__':
     parser.add_argument('--video', required=False,
                         metavar="path or URL to video",
                         help='Video to apply the color splash effect on')
+    parser.add_argument("--gpu", help='assign gpu for training', required=False)
+    parser.add_argument("--allow-growth", action="store_true", help="Tensorflow 2 GPU compatibility flag", required=False)
+    
     args = parser.parse_args()
 
     # Validate arguments
@@ -325,6 +340,14 @@ if __name__ == '__main__':
         config = InferenceConfig()
     config.display()
 
+    # Assign GPUs
+    if args.gpu:
+        os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
+        assert len(args.gpu.split(',')) >= config.GPU_COUNT
+    if args.allow_growth:
+        gpus = tf.config.get_visible_devices("GPU")
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
     # Create model
     if args.command == "train":
         model = modellib.MaskRCNN(mode="training", config=config,

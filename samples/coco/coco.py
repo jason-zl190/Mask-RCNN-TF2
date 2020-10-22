@@ -26,7 +26,8 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     # Run COCO evaluatoin on the last model you trained
     python3 coco.py evaluate --dataset=/path/to/coco/ --model=last
 """
-
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import sys
 import time
@@ -81,7 +82,7 @@ class CocoConfig(Config):
     IMAGES_PER_GPU = 2
 
     # Uncomment to train on 8 GPUs (default is 1)
-    # GPU_COUNT = 8
+    # GPU_COUNT = 3
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 80  # COCO has 80 classes
@@ -428,6 +429,9 @@ if __name__ == '__main__':
                         metavar="<True|False>",
                         help='Automatically download and unzip MS-COCO files (default=False)',
                         type=bool)
+    parser.add_argument("--gpu", help='assign gpu for training', required=False)
+    parser.add_argument("--allow-growth", action="store_true", help="Tensorflow 2 GPU compatibility flag", required=False)
+
     args = parser.parse_args()
     print("Command: ", args.command)
     print("Model: ", args.model)
@@ -448,6 +452,15 @@ if __name__ == '__main__':
             DETECTION_MIN_CONFIDENCE = 0
         config = InferenceConfig()
     config.display()
+
+    # Assign GPUs
+    if args.gpu:
+        os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
+        assert len(args.gpu.split(',')) >= config.GPU_COUNT
+    if args.allow_growth:
+        gpus = tf.config.get_visible_devices("GPU")
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
 
     # Create model
     if args.command == "train":
